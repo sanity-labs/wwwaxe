@@ -1,1 +1,0 @@
-export { wwwaxe } from './wwwaxe';
