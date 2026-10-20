@@ -39,6 +39,10 @@ try {
     const out = mod.wwwaxe(html)
     if (typeof out !== 'string' || !out.includes('# Hi'))
       throw new Error('unexpected output: ' + out)
+    const pair = mod.wwwaxeFullAndCore(html, {}, { keepIds: false })
+    const core = mod.wwwaxe(html, { core: true, keepIds: false })
+    if (pair.full !== out || pair.core !== core)
+      throw new Error('wwwaxeFullAndCore does not match two wwwaxe calls: ' + JSON.stringify(pair))
   }
 
   writeFileSync(
@@ -50,14 +54,20 @@ try {
   expected(await import(join(consumer, 'esm.mjs')))
 
   const usage =
-    `import { wwwaxe, type WwwaxeOptions } from ${JSON.stringify(pkg.name)}\n` +
+    `import { wwwaxe, wwwaxeFullAndCore, type WwwaxeOptions } from ${JSON.stringify(pkg.name)}\n` +
     `const options: WwwaxeOptions = { core: true }\n` +
-    `export const out: string = wwwaxe('<p>x</p>', options)\n`
+    `export const out: string = wwwaxe('<p>x</p>', options)\n` +
+    `export const pair: { full: string; core: string } = wwwaxeFullAndCore('<p>x</p>', options, { keepIds: false })\n` +
+    `// @ts-expect-error coreOptions may only set keepIds\n` +
+    `wwwaxeFullAndCore('<p>x</p>', options, { markdown: false })\n`
   writeFileSync(
     join(consumer, 'types.cts'),
     `import wwwaxeModule = require(${JSON.stringify(pkg.name)})\n` +
       `const options: wwwaxeModule.WwwaxeOptions = { core: true }\n` +
-      `export const out: string = wwwaxeModule.wwwaxe('<p>x</p>', options)\n`,
+      `export const out: string = wwwaxeModule.wwwaxe('<p>x</p>', options)\n` +
+      `export const pair: { full: string; core: string } = wwwaxeModule.wwwaxeFullAndCore('<p>x</p>', options, { keepIds: false })\n` +
+      `// @ts-expect-error coreOptions may only set keepIds\n` +
+      `wwwaxeModule.wwwaxeFullAndCore('<p>x</p>', options, { markdown: false })\n`,
   )
   writeFileSync(join(consumer, 'types.mts'), usage)
   writeFileSync(

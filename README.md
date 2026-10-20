@@ -153,7 +153,7 @@ Chrome elements removed in core mode: `<header>`, `<nav>`, `<footer>`, `<aside>`
 
 ## Large and deeply nested pages
 
-Conversion time grows linearly with page size, so a page with tens of thousands of sibling elements converts in a fraction of a second. A page nested so deeply that conversion overflows the stack (a PDF served as `text/html` parses into tens of thousands of unclosed tags) is converted again with everything nested deeper than 512 levels flattened into its ancestor at that depth. Block elements get a space where they start or end and inline elements don't, so words stay whole; text that would have been removed anyway (scripts, styles, `hidden`, `aria-hidden`, `display:none`, `visibility:hidden`) is dropped rather than flattened. Pages that converted before give the same text.
+Large flat pages convert quickly: each parent's child list is rebuilt once, so a page with tens of thousands of sibling elements converts in a fraction of a second, and doubling it roughly doubles the time. Some inputs still scale worse than that: core mode looks up the target of every skip link in the whole tree, nested disclosure panels each re-check their subtree, and parsing very deep nesting is quadratic inside `htmlparser2`. A page nested so deeply that conversion overflows the stack (a PDF served as `text/html` parses into tens of thousands of unclosed tags) is converted again with everything nested deeper than 512 levels flattened into its ancestor at that depth. Block elements get a space where they start or end and inline elements don't, so words stay whole; text that would have been removed anyway (scripts, styles, `hidden`, `aria-hidden`, `display:none`, `visibility:hidden`) is dropped rather than flattened. Pages that converted before give the same text, except near the stack limit (roughly 10,000 to 16,000 levels in a worker) where whether a page overflows depends on how warmed up the process is, so the same page can come out flattened on one conversion and not on the next.
 
 Whether a page near the stack limit needs the fallback depends on the stack available, so run conversions of untrusted pages in a worker thread, as a crawler would.
 
@@ -165,7 +165,7 @@ import { wwwaxeFullAndCore } from '@sanity-labs/wwwaxe'
 const { full, core } = wwwaxeFullAndCore(rawHtml, {}, { keepIds: false })
 ```
 
-Returns the same strings as `wwwaxe(rawHtml, options)` and `wwwaxe(rawHtml, { ...options, ...coreOptions, core: true })`, but parses the page once. `coreOptions` may only set `keepIds`.
+Returns the same strings as `wwwaxe(rawHtml, { ...options, core: false })` and `wwwaxe(rawHtml, { ...options, ...coreOptions, core: true })`, but parses the page once. `coreOptions` may only set `keepIds`.
 
 ## RSC streaming reassembly
 

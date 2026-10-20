@@ -258,11 +258,11 @@ interface ProcessingOptions extends WwwaxeOptions {
   controlledIds: Set<string>
 }
 
-// ─── Linear tree edits and the deep-nesting fallback ────────────────────────
+// ─── Single-pass tree edits and the deep-nesting fallback ────────────────────────
 
 /**
  * Replace a node's child list and relink parent, prev and next in one pass.
- * Rebuilding once per parent keeps big flat pages linear.
+ * Rebuilding once per parent keeps wide flat pages from going quadratic.
  */
 function setChildren(parent: ParentNode, children: ChildNode[]): void {
   parent.children = children

@@ -47,8 +47,9 @@ describe('real pages with the default options', () => {
 
 describe('large flat pages', () => {
   // 16,000 sibling links (344 KB) took about 10 s when every unwrap and
-  // markdown rewrite rebuilt the parent's child list: the parked-domain hang.
-  // These are ordinary links; a page of 16,000 skip links is another (upstream) case.
+  // markdown rewrite rebuilt the parent's child list.
+  // These are ordinary links; skip links are slower for an unrelated reason: core mode
+  // looks up each skip link's target in the whole tree.
   const links = page('real-pages/skip-link-content.html')
     .match(/<a [^>]*>[^<]+<\/a>/g)!
     .filter((link) => !link.includes('href="#'))
@@ -69,11 +70,13 @@ describe('large flat pages', () => {
     expect(performance.now() - started).toBeLessThan(2_000)
   })
 
-  it('removes 16,000 chrome siblings and unwraps 16,000 spans quickly in core mode', () => {
-    const html = `<body>${'<nav>menu</nav>'.repeat(16_000)}<main>${'<span>word </span>'.repeat(16_000)}<p>${END}</p></main></body>`
+  // Sized so that per-edit rebuilds of the child list (quadratic) take over ten seconds,
+  // while linear conversion takes well under a second.
+  it('removes 32,000 chrome siblings and unwraps 32,000 spans quickly in core mode', () => {
+    const html = `<body>${'<nav>menu</nav>'.repeat(32_000)}<main>${'<span>word </span>'.repeat(32_000)}<p>${END}</p></main></body>`
     const started = performance.now()
     const text = wwwaxe(html, { core: true })
-    expect(performance.now() - started).toBeLessThan(3_000)
+    expect(performance.now() - started).toBeLessThan(1_000)
     expect(text).not.toContain('menu')
     expect(text).toContain(END)
   })
@@ -354,10 +357,9 @@ describe('one conversion for the full and the core text', () => {
     expect(wwwaxeFullAndCore(html).full).toBe(wwwaxe(html))
   })
 
-  // Copying the page for core mode recurses deeper than one conversion. The
-  // round-1 build flattened this page in the paired call on every attempt
-  // (nested sections at 8,000 to 10,000 levels did too, but take seconds to
-  // convert in upstream code); now the pair falls back to two calls.
+  // Copying the page for core mode recurses deeper than one conversion, so a page that one
+  // conversion handles can overflow in the paired call. When it does, the pair falls back to
+  // two separate calls instead of flattening the page in both outputs.
   const PAIRED_DEEP = {
     'unclosed <b>, 11,000 levels': {
       html: `<body>${'<b>x '.repeat(11_000)}end</body>`,
