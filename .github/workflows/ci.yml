@@ -26,3 +26,22 @@ jobs:
       - run: pnpm run format
       - run: pnpm test
       - run: pnpm run test:package
+
+  # `engines` says Node 20+, but the build needs Node 22.18+ (tsdown). Build on Node 24, then
+  # load the packed package on Node 20 through require, import and its types.
+  node20:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - run: node --version
+      - run: node scripts/smoke-package.mjs --no-build

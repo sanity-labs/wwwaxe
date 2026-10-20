@@ -1,5 +1,7 @@
 // Packs the package and loads it the way consumers do: require() from CommonJS, import from
 // ESM, and the type declarations under both Node16 resolution modes. Run after `pnpm build`.
+// With --no-build the pack skips lifecycle scripts, so it can run on a Node version that can't
+// build (CI packs what Node 24 built, then loads it on Node 20).
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,7 +14,15 @@ const tmp = mkdtempSync(join(tmpdir(), 'wwwaxe-smoke-'))
 try {
   const packed = join(tmp, 'pack')
   mkdirSync(packed)
-  execFileSync('pnpm', ['pack', '--pack-destination', packed], { cwd: root, stdio: 'inherit' })
+  const noBuild = process.argv.includes('--no-build')
+  execFileSync(
+    'pnpm',
+    ['pack', '--pack-destination', packed, ...(noBuild ? ['--ignore-scripts'] : [])],
+    {
+      cwd: root,
+      stdio: 'inherit',
+    },
+  )
   const [tarball] = execFileSync('ls', [packed], { encoding: 'utf8' }).trim().split('\n')
 
   const consumer = join(tmp, 'consumer')
@@ -65,7 +75,9 @@ try {
     }),
   )
   execFileSync(join(root, 'node_modules/.bin/tsc'), ['-p', consumer], { stdio: 'inherit' })
-  console.log('package smoke test passed: require, import and types resolve')
+  console.log(
+    `package smoke test passed on Node ${process.versions.node}: require, import and types resolve`,
+  )
 } finally {
   rmSync(tmp, { recursive: true, force: true })
 }

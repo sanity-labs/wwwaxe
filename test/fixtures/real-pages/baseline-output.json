@@ -1,0 +1,45 @@
+{
+  "$comment": "SHA-256 of the converter output (core: {core: true}, full: {}) for each fixture, recorded from the build that had the disclosure-panel rules but not yet the linear-time edits, so those edits can show they change nothing with these options.",
+  "outputs": {
+    "collapsed-answers/accordion-portfolios.html": {
+      "core": "9743cc873cda68e41f6a806fbe007acad673059c28c16d938999e1f59ed8fb51",
+      "full": "e56cc78ffe0bba478e29a628eb77cadd91029176a30d88f7f189fc20df1db9ff"
+    },
+    "collapsed-answers/accordion-pricing-rendered-consent.html": {
+      "core": "1e0710001fa73ef5bb4e4a04bb13dc2c12f2eb226462788f43d36127046c0ef1",
+      "full": "2e45d77db51287f1687330881c55227ba8193a3a13d3de322fe4d211973274b6"
+    },
+    "collapsed-answers/accordion-pricing-rendered.html": {
+      "core": "1e0710001fa73ef5bb4e4a04bb13dc2c12f2eb226462788f43d36127046c0ef1",
+      "full": "5ae531fa3cd29e7ec7e22a1819c96ad123367dd23509d9c08867c87e19a94fac"
+    },
+    "collapsed-answers/accordion-pricing.html": {
+      "core": "a794a4cb10dcf78f091020a027fd0ad565e4c00bc44db9a1a5ef40f494e28f12",
+      "full": "c7792f40f15ba0787b269ed51cd30ef1a538db3a327a8086c2fa6e57b53319ba"
+    },
+    "collapsed-answers/accordion-privacy.html": {
+      "core": "7715e418c285f28e14062bea7ad19e566f6b1a79fc7417b5b0ae34de5bd15202",
+      "full": "44cb43efaf6dfe7e2cb5c986a4be326902909df250c75ed2b83c9dbc3149d93c"
+    },
+    "collapsed-answers/accordion-segments.html": {
+      "core": "9baa2800a941e3cd7ce568de605991b65731aba42fcb914323c55f234d26c76e",
+      "full": "888b92a076e901b5a10bc0ec34a9dfe90d54f5e51958f08129989c5e879b0602"
+    },
+    "collapsed-answers/details-faq.html": {
+      "core": "04ba4e67c26184501acd23ca5d6224a8fc1a4e492dba2457da9e370b46fc8598",
+      "full": "7d0eaf05b54561da79a3b003a9d0aa8a6809d5e70e13d4fd5d0d9a4b79c3a7e4"
+    },
+    "real-pages/hidden-menu-overlay.html": {
+      "core": "4d7b32b0598affd5c1abfb77fd4187a7c073e59af58c38a1e9a54c771869285f",
+      "full": "1e609f776f16eb63d8034825171feca803225ce9109612a143dcb456af289bbd"
+    },
+    "real-pages/site-builder-plans.html": {
+      "core": "84225266f3ff44c9bd264028371cb113a15400a5a385f47d072e3451c37947b4",
+      "full": "ec4e3d8298443361a9be4b1d88e9d3a636d77c0145b77c1bedf4d2ee7e84c88f"
+    },
+    "real-pages/skip-link-content.html": {
+      "core": "e6b959303e5323b04205e80f3014688ece1e0462ab3167fab00adbd94cfa55cb",
+      "full": "88f45e5beca19e1d299a9fdeb35da7764b037f611fd1ec4575ec989b8bf1380f"
+    }
+  }
+}
