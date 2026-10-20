@@ -14,7 +14,10 @@ Page structure also carries meaning that flat markdown loses — table relations
 
 ```bash
 npm install @sanity-labs/wwwaxe
+# or: pnpm add @sanity-labs/wwwaxe / yarn add @sanity-labs/wwwaxe
 ```
+
+Requires Node 20 or newer. The package ships both ESM and CommonJS builds with type declarations.
 
 ## Usage
 
@@ -25,8 +28,18 @@ import { wwwaxe } from '@sanity-labs/wwwaxe'
 const result = wwwaxe(rawHtml)
 
 // Core mode: also strips nav/header/footer, isolates main content
+const coreResult = wwwaxe(rawHtml, { core: true })
+```
+
+From CommonJS:
+
+```javascript
+const { wwwaxe } = require('@sanity-labs/wwwaxe')
+
 const result = wwwaxe(rawHtml, { core: true })
 ```
+
+`wwwaxe(html, options?)` takes an HTML string and returns a string; it is synchronous and does no I/O.
 
 ### Example output
 
@@ -56,6 +69,7 @@ No `<script>`, no `class="text-gray-700 leading-relaxed"`, no `data-*` noise. Ju
 ## What it does
 
 **Removes entirely:**
+
 - `<script>`, `<style>`, `<noscript>`, `<svg>`, `<link>`, `<iframe>`, `<template>` tags and their contents
 - All `class`, `style`, `data-*`, and event handler attributes (`onclick`, `onload`, etc.)
 - Hidden elements (`hidden`, `aria-hidden="true"`)
@@ -64,10 +78,11 @@ No `<script>`, no `class="text-gray-700 leading-relaxed"`, no `data-*` noise. Ju
 - Excessive whitespace
 
 **Keeps and converts:**
+
 - `<head>` → YAML frontmatter with `title`, `description`, `url` (canonical), and `og:image`
 - Headings → `## Heading` markdown syntax
 - Links → `[text](href)` markdown syntax
-- Images → `![alt](src)` markdown syntax
+- Images → `![alt](src)` markdown syntax (`data:` URIs are dropped; an image with only a data URI becomes `[image: alt]` or nothing)
 - Lists → `- item` / `1. item` markdown syntax
 - Bold/italic/code → `**bold**`, `*italic*`, `` `code` `` markdown syntax
 - Tables, forms, and other structural elements — kept as clean HTML with only semantic attributes
@@ -76,14 +91,14 @@ No `<script>`, no `class="text-gray-700 leading-relaxed"`, no `data-*` noise. Ju
 
 ## Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `markdown` | `boolean` | `true` | Convert headings, links, images, lists, bold, italic, code to markdown syntax |
-| `core` | `boolean` | `false` | Strip chrome (header, nav, footer, aside, dialog) and isolate main content |
-| `keepIds` | `boolean` | `true` | Keep `id` attributes |
-| `keepClasses` | `boolean` | `false` | Keep `class` attributes |
-| `keepDataAttributes` | `boolean` | `false` | Keep `data-*` attributes |
-| `keepAriaHidden` | `boolean` | `false` | Keep `aria-hidden="true"` elements |
+| Option               | Type      | Default | Description                                                                   |
+| -------------------- | --------- | ------- | ----------------------------------------------------------------------------- |
+| `markdown`           | `boolean` | `true`  | Convert headings, links, images, lists, bold, italic, code to markdown syntax |
+| `core`               | `boolean` | `false` | Strip chrome (header, nav, footer, aside, dialog) and isolate main content    |
+| `keepIds`            | `boolean` | `true`  | Keep `id` attributes                                                          |
+| `keepClasses`        | `boolean` | `false` | Keep `class` attributes                                                       |
+| `keepDataAttributes` | `boolean` | `false` | Keep `data-*` attributes                                                      |
+| `keepAriaHidden`     | `boolean` | `false` | Keep `aria-hidden="true"` elements                                            |
 
 ## Core mode
 
@@ -97,7 +112,7 @@ With `core: true`, wwwaxe strips page chrome and isolates the main content befor
 
 Chrome elements removed in core mode: `<header>`, `<nav>`, `<footer>`, `<aside>`, `<dialog>`.
 
-**Note:** `<header>` elements *inside* a `<section>` or `<article>` are preserved — they're content headers, not page chrome.
+**Note:** `<header>` elements _inside_ a `<section>` or `<article>` are preserved — they're content headers, not page chrome.
 
 ## RSC streaming reassembly
 
@@ -105,9 +120,33 @@ React Server Components pages often stream content as a series of `<div hidden i
 
 wwwaxe automatically detects this pattern and reassembles the streamed fragments into `<main>` before processing. No configuration needed — if the page looks like an RSC streaming page, it's handled transparently.
 
+## Development
+
+The package runs on Node 20+. Building it needs Node 22.18+ or 24.11+ (tsdown's requirement; CI runs Node 24) and pnpm (`corepack enable` picks up the pinned version).
+
+```sh
+pnpm install
+pnpm build         # tsdown: dist/ with CommonJS, ESM and type declarations
+pnpm typecheck     # tsc (TypeScript 7)
+pnpm lint          # oxlint
+pnpm format        # oxfmt --check (pnpm format:fix to write)
+pnpm test          # vitest
+pnpm test:package  # packs the build and loads it via require, import and types
+```
+
+`dist/` is built, never committed; `prepack` rebuilds it on publish.
+
+### Tests
+
+`pnpm test` runs the vitest suite once and `pnpm test:watch` reruns it on change. The tests are targeted unit tests of the converter against small HTML snippets and real-page fixtures in `test/fixtures/`. CI runs build, typecheck, lint, format check, the tests and `pnpm test:package` on every pull request and on pushes to `main`.
+
 ## Releasing
 
-Releases are published from CI via npm trusted publishing, with provenance. Add a changeset to any PR that should ship (`npx changeset`). On merge to `master`, the release workflow opens a "Version Packages" PR; merging that PR publishes to npm.
+Releases use [changesets](https://github.com/changesets/changesets) and npm trusted publishing (OIDC, with provenance; no npm token is stored).
+
+1. In any PR that should ship, run `pnpm exec changeset`, choose the bump (patch, minor or major) and write the entry. It becomes the changelog line, so describe what changed for users.
+2. When the PR merges to `main`, the Release workflow opens (or updates) a "Version Packages" PR that bumps the version and writes `CHANGELOG.md`.
+3. Merging the "Version Packages" PR publishes to npm and creates the tag.
 
 ## License
 
