@@ -6,6 +6,8 @@ import {
   Node,
   Document,
   type ChildNode,
+  type ParentNode,
+  cloneNode,
   isTag,
   isText,
   hasChildren,
@@ -16,7 +18,7 @@ import { removeElement, textContent, getChildren } from 'domutils'
 export interface WwwaxeOptions {
   /** Keep data-* attributes (default: false) */
   keepDataAttributes?: boolean
-  /** Keep id attributes (default: true) */
+  /** Keep id attributes (default: true). When false, ids still guide core mode's choice of content element. */
   keepIds?: boolean
   /** Keep class attributes (default: false) */
   keepClasses?: boolean
@@ -234,6 +236,127 @@ const CHROME_ROLES = new Set(['banner', 'navigation', 'complementary', 'contenti
 
 /** Well-known IDs for main content fallback */
 const WELL_KNOWN_CONTENT_IDS = ['main-content', 'content', 'main', 'page-content', 'site-content']
+
+/** Depth beyond which a page that overflowed the stack is flattened on the second attempt */
+const MAX_DEPTH = 512
+
+const VOID_ELEMENTS = new Set([
+  'br',
+  'hr',
+  'img',
+  'input',
+  'meta',
+  'source',
+  'track',
+  'col',
+  'base',
+])
+const HEAD_ELEMENTS = new Set(['head', 'html', 'body', 'title'])
+
+/** Options used while processing: the caller's options plus the ids that control disclosure panels */
+interface ProcessingOptions extends WwwaxeOptions {
+  controlledIds: Set<string>
+}
+
+// ─── Linear tree edits and the deep-nesting fallback ────────────────────────
+
+/**
+ * Replace a node's child list and relink parent, prev and next in one pass.
+ * Rebuilding once per parent keeps big flat pages linear.
+ */
+function setChildren(parent: ParentNode, children: ChildNode[]): void {
+  parent.children = children
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i]!
+    child.parent = parent
+    child.prev = i > 0 ? children[i - 1]! : null
+    child.next = i < children.length - 1 ? children[i + 1]! : null
+  }
+}
+
+/** Whether processing would drop this element anyway, so flattening must not keep its text */
+function isHiddenSubtree(el: Element): boolean {
+  if (REMOVE_TAGS.has(el.tagName.toLowerCase())) return true
+  if (el.attribs.hidden !== undefined || el.attribs['aria-hidden'] === 'true') return true
+  const style = el.attribs.style || ''
+  return (
+    style.includes('display:none') ||
+    style.includes('display: none') ||
+    style.includes('visibility:hidden') ||
+    style.includes('visibility: hidden')
+  )
+}
+
+function isStackOverflow(error: unknown): boolean {
+  return error instanceof RangeError && /call stack/i.test(error.message)
+}
+
+/**
+ * Run a conversion normally first. Only if it overflows the stack (a PDF served as
+ * text/html parses into tens of thousands of unclosed tags) run it again with deep
+ * nesting flattened.
+ */
+function convertWithDepthFallback(convert: (limitNesting: boolean) => string): string {
+  try {
+    return convert(false)
+  } catch (error) {
+    if (!isStackOverflow(error)) throw error
+    return convert(true)
+  }
+}
+
+/** Flatten anything nested deeper than MAX_DEPTH into its ancestor at that depth */
+function limitDepth(doc: Document): void {
+  const stack: Array<[Node, number]> = [[doc, 0]]
+  while (stack.length > 0) {
+    const [node, depth] = stack.pop()!
+    if (!hasChildren(node)) continue
+    if (depth >= MAX_DEPTH) {
+      flattenSubtree(node)
+      continue
+    }
+    for (const child of node.children) stack.push([child, depth + 1])
+  }
+}
+
+const BLOCK_END = Symbol('block end')
+
+function isInlineTag(node: Element): boolean {
+  const tag = node.tagName.toLowerCase()
+  return tag === 'a' || (UNWRAP_TAGS.has(tag) && tag !== 'div' && tag !== 'center')
+}
+
+/**
+ * Lift every descendant of `el` into `el`, in document order, with a space where a
+ * block element starts or ends. Subtrees that would be removed anyway are dropped.
+ */
+function flattenSubtree(el: ParentNode): void {
+  const flat: ChildNode[] = []
+  const stack: Array<ChildNode | typeof BLOCK_END> = [...el.children].reverse()
+  let boundary = false
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    if (node === BLOCK_END) {
+      boundary = true
+      continue
+    }
+    if (node.type === 'comment') continue
+    if (isTag(node) && isHiddenSubtree(node)) continue
+    if (isTag(node)) {
+      if (!isInlineTag(node)) boundary = true
+    } else if (boundary) {
+      flat.push(new Text(' '))
+      boundary = false
+    }
+    flat.push(node)
+    if (hasChildren(node)) {
+      if (isTag(node) && !isInlineTag(node)) stack.push(BLOCK_END)
+      for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]!)
+      setChildren(node, [])
+    }
+  }
+  setChildren(el, flat)
+}
 
 function isEventAttribute(name: string): boolean {
   return name.startsWith('on') && name.length > 2
@@ -556,32 +679,26 @@ function reassembleRSCPayloads(doc: Document): void {
 function removeChromeElements(node: Node): void {
   if (!hasChildren(node)) return
 
-  // Copy children since we modify during iteration
-  const children = [...getChildren(node)]
-  for (const child of children) {
+  const kept: ChildNode[] = []
+  for (const child of node.children) {
     if (isTag(child)) {
       const tag = child.tagName.toLowerCase()
       const role = (child.attribs.role || '').toLowerCase()
 
-      if (CHROME_TAGS.has(tag) || CHROME_ROLES.has(role)) {
-        removeElement(child)
-        continue
-      }
+      if (CHROME_TAGS.has(tag) || CHROME_ROLES.has(role)) continue
 
       // <header> is chrome only when it's page-level (not inside a sectioning element).
       // HTML5 allows <header> inside <section>/<article>/<main> as a section header.
       if (tag === 'header') {
         const isInsideSectioning =
           node && isTag(node) && SECTIONING_TAGS.has((node as Element).tagName.toLowerCase())
-        if (!isInsideSectioning) {
-          removeElement(child)
-          continue
-        }
+        if (!isInsideSectioning) continue
       }
     }
-    // Recurse into remaining children
-    removeChromeElements(child)
+    kept.push(child)
   }
+  if (kept.length !== node.children.length) setChildren(node, kept)
+  for (const child of kept) removeChromeElements(child)
 }
 
 /**
@@ -748,15 +865,133 @@ function stripAttributes(el: Element, options: WwwaxeOptions): void {
   el.attribs = newAttribs
 }
 
+// ─── Collapsed disclosure panels ────────────────────────────────────────────
+
+function hasVisibleText(node: Node): boolean {
+  if (isText(node)) return node.data.trim().length > 0
+  if (isTag(node) && REMOVE_TAGS.has(node.tagName.toLowerCase())) return false
+  return hasChildren(node) && getChildren(node).some((child) => hasVisibleText(child))
+}
+
+/** Chrome containers: a control inside one is a menu trigger, not an accordion toggle */
+const CONTROL_CHROME_TAGS = new Set(['nav', 'header', 'footer', 'aside'])
+const MENU_CONTROL_ROLES = new Set(['combobox', 'searchbox'])
+const TEXT_INPUT_TYPES = new Set(['text', 'search'])
+/** Roles of popups and overlays that are never an FAQ answer */
+const NOT_DISCLOSURE_ROLES = new Set([
+  'dialog',
+  'alertdialog',
+  'menu',
+  'menubar',
+  'listbox',
+  'tooltip',
+])
+
+/** Whether an element with aria-controls opens a menu or search suggestions rather than a panel */
+function isMenuControl(el: Element): boolean {
+  const popup = el.attribs['aria-haspopup']
+  if (popup !== undefined && popup !== 'false') return true
+  if (
+    el.tagName.toLowerCase() === 'input' &&
+    TEXT_INPUT_TYPES.has((el.attribs.type || 'text').toLowerCase())
+  ) {
+    return true
+  }
+  if (el.attribs['aria-autocomplete'] !== undefined) return true
+  if (MENU_CONTROL_ROLES.has((el.attribs.role || '').toLowerCase())) return true
+  if (
+    /\b(menu|navigation)\b/i.test(el.attribs['aria-label'] || '') &&
+    textContent(el).trim() === ''
+  ) {
+    return true
+  }
+  for (let node: ParentNode | null = el.parent; node; node = node.parent) {
+    if (isTag(node) && CONTROL_CHROME_TAGS.has(node.tagName.toLowerCase())) return true
+  }
+  return false
+}
+
+/** Ids listed in the aria-controls of controls that are not menu triggers */
+function collectControlledIds(doc: Document): Set<string> {
+  const ids = new Set<string>()
+  for (const el of findElements(
+    doc,
+    (el) => el.attribs['aria-controls'] !== undefined && !isMenuControl(el),
+  )) {
+    for (const id of (el.attribs['aria-controls'] ?? '').split(/\s+/)) if (id) ids.add(id)
+  }
+  return ids
+}
+
+function isNotDisclosure(el: Element, role: string, controlledIds: Set<string>): boolean {
+  if (NOT_DISCLOSURE_ROLES.has(role) || el.attribs['aria-modal'] === 'true') return true
+  // A consent banner, unless a question button controls it (an FAQ answer about cookies)
+  if (
+    role === 'region' &&
+    !controlledIds.has(el.attribs.id ?? '') &&
+    /cookie|consent/i.test(el.attribs['aria-label'] || '')
+  ) {
+    return true
+  }
+  // A menu drawer: its only text is inside a nav
+  return containsNav(el) && !hasTextOutsideNav(el)
+}
+
+function isNavElement(node: Element): boolean {
+  return (
+    node.tagName.toLowerCase() === 'nav' || (node.attribs.role || '').toLowerCase() === 'navigation'
+  )
+}
+
+function containsNav(node: Node): boolean {
+  if (isTag(node) && isNavElement(node)) return true
+  return hasChildren(node) && getChildren(node).some((child) => containsNav(child))
+}
+
+function hasTextOutsideNav(node: Node): boolean {
+  if (isText(node)) return node.data.trim().length > 0
+  if (!isTag(node)) return false
+  if (isNavElement(node) || REMOVE_TAGS.has(node.tagName.toLowerCase())) return false
+  return hasChildren(node) && getChildren(node).some((child) => hasTextOutsideNav(child))
+}
+
+/** An element with text of its own that a page collapses: accordion and tab panels, details */
+function isDisclosurePanel(el: Element, controlledIds: Set<string>): boolean {
+  const role = (el.attribs.role || '').toLowerCase()
+  if (isNotDisclosure(el, role, controlledIds)) return false
+  if (controlledIds.has(el.attribs.id ?? '')) return true
+  if (role === 'tabpanel' || role === 'region') return true
+  for (let node: ParentNode | null = el.parent; node; node = node.parent) {
+    if (isTag(node) && node.tagName.toLowerCase() === 'details') return true
+  }
+  return false
+}
+
+/** aria-hidden="true" hides an element unless it is a disclosure panel with text */
+function isAriaHiddenNoise(el: Element, options: ProcessingOptions): boolean {
+  if (options.keepAriaHidden || el.attribs['aria-hidden'] !== 'true') return false
+  return !(isDisclosurePanel(el, options.controlledIds) && hasVisibleText(el))
+}
+
+/** Inline display:none on a disclosure panel with text: scripts collapse these after load */
+function isScriptHiddenPanel(el: Element, options: ProcessingOptions): boolean {
+  return isDisclosurePanel(el, options.controlledIds) && hasVisibleText(el)
+}
+
 /**
  * Check if an element is hidden
  */
-function isHidden(el: Element, options: WwwaxeOptions): boolean {
+function isHidden(el: Element, options: ProcessingOptions): boolean {
   if (el.attribs.hidden !== undefined) return true
-  if (!options.keepAriaHidden && el.attribs['aria-hidden'] === 'true') return true
+  if (isAriaHiddenNoise(el, options)) return true
   // Check for display:none or visibility:hidden in inline styles
   const style = el.attribs.style || ''
-  if (style.includes('display:none') || style.includes('display: none')) return true
+  if (
+    (style.includes('display:none') || style.includes('display: none')) &&
+    !isScriptHiddenPanel(el, options)
+  ) {
+    return true
+  }
   if (style.includes('visibility:hidden') || style.includes('visibility: hidden')) return true
   return false
 }
@@ -799,15 +1034,60 @@ function hasContentAttributes(el: Element, options: WwwaxeOptions = {}): boolean
 /**
  * Process the DOM tree, stripping non-content nodes
  */
-function processNode(node: Node, options: WwwaxeOptions, unwrapTags: Set<string>): void {
+function processChildren(
+  node: ParentNode,
+  options: ProcessingOptions,
+  unwrapTags: Set<string>,
+): void {
+  const children: ChildNode[] = []
+  for (const child of node.children)
+    collectProcessed(children, processNode(child, options, unwrapTags))
+  setChildren(node, children)
+}
+
+function endsWithSpace(node: ChildNode): boolean {
+  return node.type === 'text' && /\s$/.test((node as Text).data)
+}
+
+function startsWithSpace(node: ChildNode): boolean {
+  return node.type === 'text' && /^\s/.test((node as Text).data)
+}
+
+/**
+ * Process one node bottom-up. Returns the node to keep, its children to splice in
+ * place of it (unwrapped), or null to drop it. The parent rebuilds its child list once.
+ */
+function processNode(
+  node: ChildNode,
+  options: ProcessingOptions,
+  unwrapTags: Set<string>,
+): ChildNode | ChildNode[] | null {
   // Remove comments
-  if (node.type === 'comment') {
-    removeElement(node as ChildNode)
-    return
+  if (node.type === 'comment') return null
+  if (!isTag(node)) return node
+
+  const early = enterNode(node, options)
+  if (early !== undefined) return early
+
+  const kids = node.children
+  const children: ChildNode[] = []
+  for (const kid of kids) collectProcessed(children, processNode(kid, options, unwrapTags))
+  setChildren(node, children)
+
+  return leaveNode(node, options, unwrapTags)
+}
+
+function collectProcessed(children: ChildNode[], result: ChildNode | ChildNode[] | null): void {
+  if (result === null) return
+  if (Array.isArray(result)) {
+    for (const grandchild of result) children.push(grandchild)
+  } else {
+    children.push(result)
   }
+}
 
-  if (!isTag(node)) return
-
+/** Decide before descending: null drops the element, undefined means process its children */
+function enterNode(node: Element, options: ProcessingOptions): Element | null | undefined {
   const tag = node.tagName.toLowerCase()
 
   // Remove entire tag + children for blacklisted tags
@@ -815,32 +1095,26 @@ function processNode(node: Node, options: WwwaxeOptions, unwrapTags: Set<string>
     // Exception: keep useful link tags
     if (tag === 'link' && isUsefulLink(node)) {
       stripAttributes(node, options)
-      return
+      return node
     }
-    removeElement(node)
-    return
+    return null
   }
 
   // Remove hidden elements
-  if (isHidden(node, options)) {
-    removeElement(node)
-    return
-  }
+  if (isHidden(node, options)) return null
 
   // Filter meta tags — only keep useful ones
-  if (tag === 'meta' && !isUsefulMeta(node)) {
-    removeElement(node)
-    return
-  }
+  if (tag === 'meta' && !isUsefulMeta(node)) return null
 
-  // Process children first (bottom-up)
-  if (hasChildren(node)) {
-    // Copy array since we may modify during iteration
-    const children = [...getChildren(node)]
-    for (const child of children) {
-      processNode(child, options, unwrapTags)
-    }
-  }
+  return undefined
+}
+
+function leaveNode(
+  node: Element,
+  options: ProcessingOptions,
+  unwrapTags: Set<string>,
+): Element | ChildNode[] | null {
+  const tag = node.tagName.toLowerCase()
 
   // Strip attributes on all kept elements
   stripAttributes(node, options)
@@ -850,33 +1124,78 @@ function processNode(node: Node, options: WwwaxeOptions, unwrapTags: Set<string>
   if (!KEEP_TAGS.has(tag)) {
     if (unwrapTags.has(tag) && !hasContentAttributes(node, options)) {
       // Unwrap: replace element with its children (only if no meaningful attributes)
-      unwrapElement(node)
-      return
+      return node.children.length === 0 ? null : node.children
     }
     // Unknown tag — keep if it has content, otherwise remove
-    if (!hasMeaningfulContent(node)) {
-      removeElement(node)
-      return
-    }
+    if (!hasMeaningfulContent(node)) return null
     // Keep unknown tags that have content (custom elements, etc.)
   }
 
   // Remove empty structural elements (except void elements and head-level)
-  const voidElements = new Set([
-    'br',
-    'hr',
-    'img',
-    'input',
-    'meta',
-    'source',
-    'track',
-    'col',
-    'base',
-  ])
-  const headElements = new Set(['head', 'html', 'body', 'title'])
-  if (!voidElements.has(tag) && !headElements.has(tag) && !hasMeaningfulContent(node)) {
-    removeElement(node)
+  if (!VOID_ELEMENTS.has(tag) && !HEAD_ELEMENTS.has(tag) && !hasMeaningfulContent(node)) return null
+  return node
+}
+
+// ─── Dropping ids (keepIds: false) ──────────────────────────────────────────
+
+/** Ids core mode's fallback looks for: skip-link targets and the well-known content ids */
+function coreTargetIds(doc: Document): Set<string> {
+  const ids = new Set<string>(WELL_KNOWN_CONTENT_IDS)
+  for (const link of findElements(
+    doc,
+    (el) => el.tagName.toLowerCase() === 'a' && (el.attribs.href || '').startsWith('#'),
+  )) {
+    if (textContent(link).toLowerCase().includes('skip'))
+      ids.add((link.attribs.href ?? '').slice(1))
   }
+  return ids
+}
+
+const BLOCK_UNWRAP_TAGS = new Set(['div', 'center'])
+
+/**
+ * Drop every id except those in `keep`, unwrapping wrappers that only carried one.
+ * Unwrapping a block wrapper puts a space between its text and its neighbours'.
+ */
+function dropIds(
+  node: Node,
+  unwrapTags: Set<string>,
+  options: WwwaxeOptions,
+  keep: Set<string>,
+): void {
+  if (!hasChildren(node)) return
+
+  const children: ChildNode[] = []
+  let separate = false
+  const push = (child: ChildNode): void => {
+    const last = children[children.length - 1]
+    if (separate && last && !endsWithSpace(last) && !startsWithSpace(child)) {
+      children.push(new Text(' '))
+    }
+    separate = false
+    children.push(child)
+  }
+
+  for (const child of node.children) {
+    if (isTag(child)) {
+      dropIds(child, unwrapTags, options, keep)
+      if (child.attribs.id !== undefined && keep.has(child.attribs.id)) {
+        push(child)
+        continue
+      }
+      delete child.attribs.id
+      const tag = child.tagName.toLowerCase()
+      if (!KEEP_TAGS.has(tag) && unwrapTags.has(tag) && !hasContentAttributes(child, options)) {
+        const block = BLOCK_UNWRAP_TAGS.has(tag)
+        if (block) separate = true
+        for (const grandchild of child.children) push(grandchild)
+        if (block) separate = true
+        continue
+      }
+    }
+    push(child)
+  }
+  setChildren(node, children)
 }
 
 /**
@@ -921,36 +1240,6 @@ function unwrapElement(el: Element): void {
 }
 
 /**
- * Replace an element with a text node in the DOM
- */
-function replaceWithText(el: Element, text: string): void {
-  const parent = el.parentNode
-  if (!parent || !hasChildren(parent)) return
-
-  const textNode = new Text(text)
-  textNode.parent = parent
-
-  const parentChildren = getChildren(parent)
-  const index = parentChildren.indexOf(el)
-  if (index === -1) return
-
-  const mutableParent = parent as any
-  mutableParent.children = [
-    ...parentChildren.slice(0, index),
-    textNode,
-    ...parentChildren.slice(index + 1),
-  ]
-
-  // Fix prev/next links
-  const allChildren = getChildren(parent)
-  for (let i = 0; i < allChildren.length; i++) {
-    const child = allChildren[i] as any
-    child.prev = i > 0 ? allChildren[i - 1] : null
-    child.next = i < allChildren.length - 1 ? allChildren[i + 1] : null
-  }
-}
-
-/**
  * Get the text content of a node (recursively), preserving any already-rewritten markdown text
  */
 function getMdTextContent(node: Node): string {
@@ -962,22 +1251,27 @@ function getMdTextContent(node: Node): string {
 }
 
 /**
- * Rewrite HTML tags to markdown syntax (bottom-up DOM pass)
+ * Rewrite HTML tags to markdown syntax (bottom-up DOM pass). Returns the node to put
+ * in this one's place, or null to drop it.
  */
-function markdownRewrite(node: Node): void {
-  if (!hasChildren(node) && !isTag(node)) return
+function markdownRewrite(node: ChildNode): ChildNode | null {
+  if (hasChildren(node)) rewriteChildren(node)
+  return isTag(node) ? rewriteElement(node) : node
+}
 
-  // Process children first (bottom-up) so nested rewrites work
-  if (hasChildren(node)) {
-    const children = [...getChildren(node)]
-    for (const child of children) {
-      markdownRewrite(child)
-    }
+function rewriteChildren(node: ParentNode): void {
+  const kids = node.children
+  let changed = false
+  const children: ChildNode[] = []
+  for (const kid of kids) {
+    const next = markdownRewrite(kid)
+    if (next !== kid) changed = true
+    if (next) children.push(next)
   }
+  if (changed) setChildren(node, children)
+}
 
-  if (!isTag(node)) return
-
-  const el = node as Element
+function rewriteElement(el: Element): ChildNode | null {
   const tag = el.tagName.toLowerCase()
   const BACKTICK = String.fromCharCode(96)
   const TRIPLE_BACKTICK = BACKTICK + BACKTICK + BACKTICK
@@ -986,52 +1280,41 @@ function markdownRewrite(node: Node): void {
     case 'strong':
     case 'b': {
       const text = getMdTextContent(el)
-      replaceWithText(el, '**' + text + '**')
-      break
+      return new Text('**' + text + '**')
     }
     case 'em':
     case 'i': {
       const text = getMdTextContent(el)
-      replaceWithText(el, '*' + text + '*')
-      break
+      return new Text('*' + text + '*')
     }
     case 'del':
     case 's':
     case 'strike': {
       const text = getMdTextContent(el)
-      replaceWithText(el, '~~' + text + '~~')
-      break
+      return new Text('~~' + text + '~~')
     }
     case 'a': {
       const href = el.attribs.href || ''
       const text = getMdTextContent(el)
-      replaceWithText(el, '[' + text + '](' + href + ')')
-      break
+      return new Text('[' + text + '](' + href + ')')
     }
     case 'img': {
       const src = el.attribs.src || ''
       const alt = el.attribs.alt || ''
       // Skip images with data URIs — they can be 250KB+ of base64
       if (src.trimStart().startsWith('data:')) {
-        if (alt) {
-          replaceWithText(el, '[image: ' + alt + ']')
-        } else {
-          removeElement(el)
-        }
-      } else {
-        replaceWithText(el, '![' + alt + '](' + src + ')')
+        return alt ? new Text('[image: ' + alt + ']') : null
       }
-      break
+      return new Text('![' + alt + '](' + src + ')')
     }
     case 'code': {
       // Check if parent is <pre> — if so, skip (handled by pre)
       const parent = el.parentNode
       if (parent && isTag(parent) && parent.tagName.toLowerCase() === 'pre') {
-        break
+        return el
       }
       const text = getMdTextContent(el)
-      replaceWithText(el, BACKTICK + text + BACKTICK)
-      break
+      return new Text(BACKTICK + text + BACKTICK)
     }
     case 'pre': {
       // Get content — might be <pre><code>text</code></pre> or <pre>text</pre>
@@ -1043,8 +1326,7 @@ function markdownRewrite(node: Node): void {
       } else {
         text = getMdTextContent(el)
       }
-      replaceWithText(el, '\n' + TRIPLE_BACKTICK + '\n' + text + '\n' + TRIPLE_BACKTICK + '\n')
-      break
+      return new Text('\n' + TRIPLE_BACKTICK + '\n' + text + '\n' + TRIPLE_BACKTICK + '\n')
     }
     case 'h1':
     case 'h2':
@@ -1055,23 +1337,20 @@ function markdownRewrite(node: Node): void {
       const level = parseInt(tag.charAt(1))
       const prefix = '#'.repeat(level)
       const text = getMdTextContent(el)
-      replaceWithText(el, '\n' + prefix + ' ' + text + '\n')
-      break
+      return new Text('\n' + prefix + ' ' + text + '\n')
     }
     case 'blockquote': {
       const text = getMdTextContent(el).trim()
       const lines = text.split('\n')
       const quoted = lines.map((line: string) => '> ' + line).join('\n')
-      replaceWithText(el, quoted)
-      break
+      return new Text(quoted)
     }
     case 'ul': {
       const items = getChildren(el).filter(
         (c: Node) => isTag(c) && (c as Element).tagName.toLowerCase() === 'li',
       )
       const lines = items.map((item: Node) => '- ' + getMdTextContent(item).trim())
-      replaceWithText(el, lines.join('\n') + '\n')
-      break
+      return new Text(lines.join('\n') + '\n')
     }
     case 'ol': {
       const items = getChildren(el).filter(
@@ -1080,18 +1359,16 @@ function markdownRewrite(node: Node): void {
       const lines = items.map(
         (item: Node, i: number) => i + 1 + '. ' + getMdTextContent(item).trim(),
       )
-      replaceWithText(el, lines.join('\n') + '\n')
-      break
+      return new Text(lines.join('\n') + '\n')
     }
     case 'hr': {
-      replaceWithText(el, '\n---\n')
-      break
+      return new Text('\n---\n')
     }
     case 'br': {
-      replaceWithText(el, '\n')
-      break
+      return new Text('\n')
     }
   }
+  return el
 }
 
 /**
@@ -1129,39 +1406,56 @@ function cleanTextNodes(node: Node): void {
   }
 }
 
-/**
- * wwwaxe - Strip non-content data from HTML
- *
- * Takes raw HTML and returns condensed HTML retaining meaningful structure
- * and content while stripping scripts, styles, and presentational attributes.
- */
-export function wwwaxe(html: string, options: WwwaxeOptions = {}): string {
-  const markdown = options.markdown !== false
-  const unwrapTags = getUnwrapTags(options)
-
+/** Parse and run the passes that don't depend on keepIds, core or markdown */
+function prepareDocument(
+  html: string,
+  options: WwwaxeOptions,
+  limitNesting: boolean,
+): { doc: Document; frontmatter: string } {
   // 1. Parse HTML
   const doc = parseDocument(html, {
     decodeEntities: true,
   })
+  if (limitNesting) limitDepth(doc)
+
+  // ids stay while processing: id-only wrappers and disclosure panels are decided on them
+  const processing: ProcessingOptions = {
+    ...options,
+    keepIds: true,
+    controlledIds: collectControlledIds(doc),
+  }
 
   // 2. Extract frontmatter from <head> (before processNode strips attributes)
-  const frontmatterData = extractFrontmatter(doc)
+  const frontmatter = buildFrontmatter(extractFrontmatter(doc))
 
   // 2.5. Reassemble RSC streaming payloads (before processNode strips hidden elements and templates)
   reassembleRSCPayloads(doc)
 
   // 3. Process all top-level nodes (existing cleanup)
-  const children = [...getChildren(doc)]
-  for (const child of children) {
-    processNode(child, options, unwrapTags)
-  }
+  processChildren(doc, processing, getUnwrapTags(options))
 
   // 4. Remove document wrappers (html, head, body)
   removeDocumentWrappers(doc)
 
+  return { doc, frontmatter }
+}
+
+/** The passes that depend on keepIds, core and markdown, ending in the serialized string */
+function finishDocument(doc: Document, frontmatter: string, options: WwwaxeOptions): string {
+  const markdown = options.markdown !== false
+  const dropIdAttributes = options.keepIds === false
+
+  // Core mode's fallback needs the ids; they are dropped once it has picked its element
+  if (dropIdAttributes) {
+    dropIds(doc, getUnwrapTags(options), options, options.core ? coreTargetIds(doc) : new Set())
+  }
+
   // 5. If core: true, strip chrome
   if (options.core) {
     stripChrome(doc)
+  }
+  if (dropIdAttributes && options.core) {
+    dropIds(doc, getUnwrapTags(options), options, new Set())
   }
 
   // 6. Collapse whitespace
@@ -1172,7 +1466,7 @@ export function wwwaxe(html: string, options: WwwaxeOptions = {}): string {
 
   // 8. Markdown rewrite (if enabled)
   if (markdown) {
-    markdownRewrite(doc)
+    rewriteChildren(doc)
   }
 
   // 9. Serialize
@@ -1193,10 +1487,53 @@ export function wwwaxe(html: string, options: WwwaxeOptions = {}): string {
   result = result.replace(/\n{3,}/g, '\n').trim()
 
   // 13. Prepend frontmatter
-  const frontmatter = buildFrontmatter(frontmatterData)
   if (frontmatter) {
     result = frontmatter + '\n' + result
   }
 
   return result
+}
+
+/**
+ * wwwaxe - Strip non-content data from HTML
+ *
+ * Takes raw HTML and returns condensed HTML retaining meaningful structure
+ * and content while stripping scripts, styles, and presentational attributes.
+ */
+export function wwwaxe(html: string, options: WwwaxeOptions = {}): string {
+  return convertWithDepthFallback((limitNesting) => {
+    const { doc, frontmatter } = prepareDocument(html, options, limitNesting)
+    return finishDocument(doc, frontmatter, options)
+  })
+}
+
+/**
+ * Full and core output of one page from a single parse: the same strings as
+ * `wwwaxe(html, options)` with `core: false` and with `{ ...options, ...coreOptions, core: true }`.
+ * `coreOptions` may only set `keepIds`.
+ */
+export function wwwaxeFullAndCore(
+  html: string,
+  options: WwwaxeOptions = {},
+  coreOptions: Pick<WwwaxeOptions, 'keepIds'> = {},
+): { full: string; core: string } {
+  for (const key of Object.keys(coreOptions)) {
+    if (key !== 'keepIds') {
+      throw new Error('wwwaxeFullAndCore: coreOptions may only set keepIds, got ' + key)
+    }
+  }
+  const fullOptions = { ...options, core: false }
+  const coreModeOptions = { ...options, ...coreOptions, core: true }
+  try {
+    const { doc, frontmatter } = prepareDocument(html, options, false)
+    // Copying the parsed page recurses more deeply than one conversion
+    const coreDoc = cloneNode(doc, true)
+    return {
+      full: finishDocument(doc, frontmatter, fullOptions),
+      core: finishDocument(coreDoc, frontmatter, coreModeOptions),
+    }
+  } catch (error) {
+    if (!isStackOverflow(error)) throw error
+    return { full: wwwaxe(html, fullOptions), core: wwwaxe(html, coreModeOptions) }
+  }
 }

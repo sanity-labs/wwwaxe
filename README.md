@@ -43,28 +43,51 @@ const result = wwwaxe(rawHtml, { core: true })
 
 ### Example output
 
-Given a typical blog page, wwwaxe produces:
+Given this page:
 
+```html
+<html lang="en">
+<head>
+  <title>Hello World</title>
+  <meta name="description" content="A great article about things">
+  <link rel="canonical" href="https://example.com/blog/hello-world">
+  <meta property="og:image" content="https://example.com/og/hello-world.jpg">
+  <style>.prose { color: #333 }</style>
+  <script>window.dataLayer = []</script>
+</head>
+<body class="antialiased">
+  <nav class="navbar"><a href="/">Home</a> <a href="/blog">Blog</a></nav>
+  <main>
+    <article class="prose lg:prose-xl">
+      <h1 class="text-4xl font-bold">Hello World</h1>
+      <p class="text-gray-700" data-testid="intro">This is my <a href="/post" class="underline">blog post</a>.</p>
+      <img src="/photo.jpg" alt="A photo" class="rounded-lg" onclick="zoom(this)">
+      <ul class="list-disc"><li>First item</li><li>Second item</li><li>Third item</li></ul>
+    </article>
+  </main>
+  <footer>© 2026 Example</footer>
+</body>
+</html>
 ```
+
+`wwwaxe(html, { core: true })` returns:
+
+```text
 ---
-title: "Hello World"
-description: "A great article about things"
-url: "https://example.com/blog/hello-world"
-image: "https://example.com/og/hello-world.jpg"
+title: Hello World
+description: A great article about things
+url: https://example.com/blog/hello-world
+image: https://example.com/og/hello-world.jpg
 ---
-
-## Hello World
-
-This is my [blog post](/post).
-
-![A photo](/photo.jpg)
-
-- First item
+<main> <article>
+# Hello World
+ <p>This is my [blog post](/post).</p> ![A photo](/photo.jpg) - First item
 - Second item
 - Third item
+ </article> </main>
 ```
 
-No `<script>`, no `class="text-gray-700 leading-relaxed"`, no `data-*` noise. Just content.
+No `<script>` or `<style>`, no `class="text-gray-700"`, no `data-*` or `onclick` noise, and no `<nav>` or `<footer>` in core mode. Headings, links and lists become markdown; structural elements such as `<main>` and `<article>` stay as clean HTML, and the head becomes YAML frontmatter.
 
 ## What it does
 
@@ -72,7 +95,7 @@ No `<script>`, no `class="text-gray-700 leading-relaxed"`, no `data-*` noise. Ju
 
 - `<script>`, `<style>`, `<noscript>`, `<svg>`, `<link>`, `<iframe>`, `<template>` tags and their contents
 - All `class`, `style`, `data-*`, and event handler attributes (`onclick`, `onload`, etc.)
-- Hidden elements (`hidden`, `aria-hidden="true"`)
+- Hidden elements (`hidden`, `visibility:hidden`, `display:none`, `aria-hidden="true"`), except [collapsed disclosure panels](#collapsed-disclosure-panels)
 - HTML comments
 - Empty elements with no text content or meaningful children
 - Excessive whitespace
@@ -91,14 +114,28 @@ No `<script>`, no `class="text-gray-700 leading-relaxed"`, no `data-*` noise. Ju
 
 ## Options
 
-| Option               | Type      | Default | Description                                                                   |
-| -------------------- | --------- | ------- | ----------------------------------------------------------------------------- |
-| `markdown`           | `boolean` | `true`  | Convert headings, links, images, lists, bold, italic, code to markdown syntax |
-| `core`               | `boolean` | `false` | Strip chrome (header, nav, footer, aside, dialog) and isolate main content    |
-| `keepIds`            | `boolean` | `true`  | Keep `id` attributes                                                          |
-| `keepClasses`        | `boolean` | `false` | Keep `class` attributes                                                       |
-| `keepDataAttributes` | `boolean` | `false` | Keep `data-*` attributes                                                      |
-| `keepAriaHidden`     | `boolean` | `false` | Keep `aria-hidden="true"` elements                                            |
+| Option               | Type      | Default | Description                                                                                                                                                |
+| -------------------- | --------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `markdown`           | `boolean` | `true`  | Convert headings, links, images, lists, bold, italic, code to markdown syntax                                                                              |
+| `core`               | `boolean` | `false` | Strip chrome (header, nav, footer, aside, dialog) and isolate main content                                                                                 |
+| `keepIds`            | `boolean` | `true`  | Keep `id` attributes. When `false`, ids are dropped and wrappers that only carried one are unwrapped; core mode still uses ids to pick its content element |
+| `keepClasses`        | `boolean` | `false` | Keep `class` attributes                                                                                                                                    |
+| `keepDataAttributes` | `boolean` | `false` | Keep `data-*` attributes                                                                                                                                   |
+| `keepAriaHidden`     | `boolean` | `false` | Keep every `aria-hidden="true"` element, not only disclosure panels                                                                                        |
+
+## Collapsed disclosure panels
+
+FAQ accordions and tabs are often server-rendered with the collapsed answers marked `aria-hidden="true"`, and JS-rendered pages (HTML captured after the page's scripts ran) get an inline `display: none` on them instead. Dropping those hides the answers, so wwwaxe keeps the text of a _disclosure panel_: an element with text of its own that is one of
+
+- an element whose `id` is listed in the `aria-controls` of a control that is not a menu trigger (accordion and tab panels);
+- an element with `role="tabpanel"` or `role="region"`;
+- an element inside a `<details>`.
+
+A control is a menu trigger, and its panel is dropped, when it has `aria-haspopup`, sits inside `nav`, `header`, `footer` or `aside`, is a text or search `input` or has `aria-autocomplete` (search suggestions; checkbox and radio toggles are not menu triggers), has `role="combobox"` or `role="searchbox"`, or is an icon-only button whose `aria-label` says menu or navigation.
+
+An element is never a disclosure panel when it has `role` `dialog`, `alertdialog`, `menu`, `menubar`, `listbox` or `tooltip`, has `aria-modal="true"`, has text only inside a `nav` or `role="navigation"` (a menu drawer; an answer with a related-links `nav` still counts), or is a `region` whose `aria-label` mentions cookies or consent and that no control points to (a consent banner).
+
+Everything else that is `aria-hidden` or `display:none` is dropped as before. The `hidden` attribute and `visibility:hidden` always drop, and `keepAriaHidden: true` keeps every `aria-hidden` element.
 
 ## Core mode
 
@@ -113,6 +150,22 @@ With `core: true`, wwwaxe strips page chrome and isolates the main content befor
 Chrome elements removed in core mode: `<header>`, `<nav>`, `<footer>`, `<aside>`, `<dialog>`.
 
 **Note:** `<header>` elements _inside_ a `<section>` or `<article>` are preserved — they're content headers, not page chrome.
+
+## Large and deeply nested pages
+
+Conversion time grows linearly with page size, so a page with tens of thousands of sibling elements converts in a fraction of a second. A page nested so deeply that conversion overflows the stack (a PDF served as `text/html` parses into tens of thousands of unclosed tags) is converted again with everything nested deeper than 512 levels flattened into its ancestor at that depth. Block elements get a space where they start or end and inline elements don't, so words stay whole; text that would have been removed anyway (scripts, styles, `hidden`, `aria-hidden`, `display:none`, `visibility:hidden`) is dropped rather than flattened. Pages that converted before give the same text.
+
+Whether a page near the stack limit needs the fallback depends on the stack available, so run conversions of untrusted pages in a worker thread, as a crawler would.
+
+## Full and core text from one parse
+
+```typescript
+import { wwwaxeFullAndCore } from '@sanity-labs/wwwaxe'
+
+const { full, core } = wwwaxeFullAndCore(rawHtml, {}, { keepIds: false })
+```
+
+Returns the same strings as `wwwaxe(rawHtml, options)` and `wwwaxe(rawHtml, { ...options, ...coreOptions, core: true })`, but parses the page once. `coreOptions` may only set `keepIds`.
 
 ## RSC streaming reassembly
 
@@ -131,14 +184,14 @@ pnpm typecheck     # tsc (TypeScript 7)
 pnpm lint          # oxlint
 pnpm format        # oxfmt --check (pnpm format:fix to write)
 pnpm test          # vitest
-pnpm test:package  # packs the build and loads it via require, import and types
+pnpm test:package  # packs the build and loads it via require, import and types (CI also does this on Node 20)
 ```
 
 `dist/` is built, never committed; `prepack` rebuilds it on publish.
 
 ### Tests
 
-`pnpm test` runs the vitest suite once and `pnpm test:watch` reruns it on change. The tests are targeted unit tests of the converter against small HTML snippets and real-page fixtures in `test/fixtures/`. CI runs build, typecheck, lint, format check, the tests and `pnpm test:package` on every pull request and on pushes to `main`.
+`pnpm test` runs the vitest suite once and `pnpm test:watch` reruns it on change. The tests are targeted unit tests of the converter against small HTML snippets and small real-page fixtures in `test/fixtures/`. The deep-nesting tests run the converter in a worker thread with a fixed 4 MB stack, which uses Node's built-in TypeScript support, so running the tests needs Node 22.18+ or 24.11+, like the build. The README's example output is checked by a test, so it can't drift. CI runs build, typecheck, lint, format check, the tests and `pnpm test:package` on every pull request and on pushes to `main`.
 
 ## Releasing
 
