@@ -805,6 +805,61 @@ function isUsefulLink(el: Element): boolean {
   return rel === 'canonical' || rel === 'alternate'
 }
 
+const SRCSET_SPACE = new Set([' ', '\t', '\n', '\f', '\r'])
+
+/**
+ * Split a srcset value into its image candidates, the way the HTML spec does: a candidate's
+ * URL is a run of non-whitespace characters (so commas inside it, as in CDN URLs like
+ * `/w_500,h_272/img.jpg`, don't split it), and its descriptors run to the next comma that is
+ * outside parentheses. Only a comma that ends the URL token, or follows descriptors, separates
+ * candidates.
+ */
+function parseSrcset(value: string): Array<{ url: string; text: string }> {
+  const candidates: Array<{ url: string; text: string }> = []
+  const length = value.length
+  let i = 0
+  while (i < length) {
+    while (i < length && (SRCSET_SPACE.has(value.charAt(i)) || value.charAt(i) === ',')) i++
+    if (i >= length) break
+
+    const start = i
+    while (i < length && !SRCSET_SPACE.has(value.charAt(i))) i++
+    let url = value.slice(start, i)
+    let end = i
+    if (url.endsWith(',')) {
+      // A URL that ends in commas has no descriptors
+      url = url.replace(/,+$/, '')
+      end = start + url.length
+    } else {
+      let depth = 0
+      while (i < length) {
+        const char = value.charAt(i)
+        if (char === '(') depth++
+        else if (char === ')' && depth > 0) depth--
+        else if (char === ',' && depth === 0) break
+        i++
+      }
+      end = i
+    }
+    candidates.push({ url, text: value.slice(start, end).trim() })
+  }
+  return candidates
+}
+
+/**
+ * Remove data: URI candidates from a srcset value. A value with none is returned untouched,
+ * byte for byte; otherwise the remaining candidates are joined with ", ". Returns an empty
+ * string when nothing is left.
+ */
+function stripDataUrisFromSrcset(value: string): string {
+  const candidates = parseSrcset(value)
+  if (!candidates.some((candidate) => candidate.url.startsWith('data:'))) return value
+  return candidates
+    .filter((candidate) => !candidate.url.startsWith('data:'))
+    .map((candidate) => candidate.text)
+    .join(', ')
+}
+
 /**
  * Strip attributes from an element, keeping only content-relevant ones
  */
@@ -848,11 +903,7 @@ function stripAttributes(el: Element, options: WwwaxeOptions): void {
       }
       if (lowerKey === 'srcset') {
         // srcset can have multiple entries — strip any that are data URIs
-        const cleaned = value
-          .split(',')
-          .map((s) => s.trim())
-          .filter((s) => !s.startsWith('data:'))
-          .join(', ')
+        const cleaned = stripDataUrisFromSrcset(value)
         if (cleaned) {
           newAttribs[key] = cleaned
         }
