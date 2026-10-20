@@ -1,6 +1,6 @@
 {
   "name": "@sanity-labs/wwwaxe",
-  "version": "0.0.1",
+  "version": "0.3.1",
   "description": "Strip non-content data from HTML for agentic consumption. Retains meaningful page structure while dramatically reducing token count.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
