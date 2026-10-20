@@ -1,5 +1,5 @@
 {
-  "name": "wwwaxe",
+  "name": "@sanity-labs/wwwaxe",
   "version": "0.3.1",
   "description": "Strip non-content data from HTML for agentic consumption. Retains meaningful page structure while dramatically reducing token count.",
   "main": "dist/index.js",
@@ -7,9 +7,14 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     }
   },
   "files": [
@@ -17,8 +22,10 @@
   ],
   "scripts": {
     "build": "tsup",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepack": "npm run build"
   },
   "keywords": [
     "html",
@@ -34,17 +41,21 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/simen/wwwaxe.git"
+    "url": "git+https://github.com/sanity-labs/wwwaxe.git"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.1",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "htmlparser2": "^9.1.0",
     "dom-serializer": "^2.0.0",
     "domhandler": "^5.0.3",
-    "domutils": "^3.1.0"
+    "domutils": "^3.1.0",
+    "htmlparser2": "^9.1.0"
   }
 }

@@ -13,13 +13,13 @@ Page structure also carries meaning that flat markdown loses — table relations
 ## Install
 
 ```bash
-npm install simen/wwwaxe
+npm install @sanity-labs/wwwaxe
 ```
 
 ## Usage
 
 ```typescript
-import { wwwaxe } from 'wwwaxe'
+import { wwwaxe } from '@sanity-labs/wwwaxe'
 
 // Default: strips noise, converts to markdown, keeps ids
 const result = wwwaxe(rawHtml)
@@ -104,6 +104,10 @@ Chrome elements removed in core mode: `<header>`, `<nav>`, `<footer>`, `<aside>`
 React Server Components pages often stream content as a series of `<div hidden id="S:N">` elements that are injected into the DOM by a small inline script. When the page is fetched as static HTML (before JavaScript runs), the visible `<main>` is empty and all the real content sits in those hidden divs.
 
 wwwaxe automatically detects this pattern and reassembles the streamed fragments into `<main>` before processing. No configuration needed — if the page looks like an RSC streaming page, it's handled transparently.
+
+## Releasing
+
+Releases are published from CI via npm trusted publishing, with provenance. Add a changeset to any PR that should ship (`npx changeset`). On merge to `master`, the release workflow opens a "Version Packages" PR; merging that PR publishes to npm.
 
 ## License
 
