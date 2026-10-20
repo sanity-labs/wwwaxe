@@ -27,7 +27,8 @@ describe('wwwaxe', () => {
     })
 
     it('removes inline SVGs', () => {
-      const html = '<div><p>Hello</p><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="50"/></svg></div>'
+      const html =
+        '<div><p>Hello</p><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="50"/></svg></div>'
       const result = wwwaxe(html)
       expect(result).not.toContain('svg')
       expect(result).not.toContain('circle')
@@ -82,7 +83,8 @@ describe('wwwaxe', () => {
     })
 
     it('keeps src and alt on images', () => {
-      const html = '<img src="/photo.jpg" alt="A photo" class="rounded-lg" loading="lazy" width="800" height="600">'
+      const html =
+        '<img src="/photo.jpg" alt="A photo" class="rounded-lg" loading="lazy" width="800" height="600">'
       const result = wwwaxe(html, { markdown: false })
       expect(result).toContain('src="/photo.jpg"')
       expect(result).toContain('alt="A photo"')
@@ -91,7 +93,8 @@ describe('wwwaxe', () => {
     })
 
     it('keeps form-relevant attributes', () => {
-      const html = '<input type="email" name="email" placeholder="Enter email" class="input-field" data-validate="true">'
+      const html =
+        '<input type="email" name="email" placeholder="Enter email" class="input-field" data-validate="true">'
       const result = wwwaxe(html)
       expect(result).toContain('type="email"')
       expect(result).toContain('name="email"')
@@ -101,7 +104,8 @@ describe('wwwaxe', () => {
     })
 
     it('keeps role and aria-label', () => {
-      const html = '<div role="navigation" aria-label="Main menu" class="nav-wrapper"><a href="/">Home</a></div>'
+      const html =
+        '<div role="navigation" aria-label="Main menu" class="nav-wrapper"><a href="/">Home</a></div>'
       const result = wwwaxe(html)
       expect(result).toContain('role="navigation"')
       expect(result).toContain('aria-label="Main menu"')
@@ -210,13 +214,15 @@ describe('wwwaxe', () => {
     })
 
     it('extracts description to frontmatter', () => {
-      const html = '<html><head><meta name="description" content="A great page"></head><body><p>Hi</p></body></html>'
+      const html =
+        '<html><head><meta name="description" content="A great page"></head><body><p>Hi</p></body></html>'
       const result = wwwaxe(html)
       expect(result).toContain('description: A great page')
     })
 
     it('extracts og:image to frontmatter', () => {
-      const html = '<html><head><meta property="og:image" content="https://example.com/img.png"><meta property="og:title" content="My Title"></head><body><p>Hi</p></body></html>'
+      const html =
+        '<html><head><meta property="og:image" content="https://example.com/img.png"><meta property="og:title" content="My Title"></head><body><p>Hi</p></body></html>'
       const result = wwwaxe(html)
       expect(result).toContain('image: https://example.com/img.png')
       // og:title is not extracted (we use <title> tag for title)
@@ -224,26 +230,30 @@ describe('wwwaxe', () => {
     })
 
     it('extracts canonical URL to frontmatter', () => {
-      const html = '<html><head><link rel="canonical" href="https://example.com/page"></head><body><p>Hi</p></body></html>'
+      const html =
+        '<html><head><link rel="canonical" href="https://example.com/page"></head><body><p>Hi</p></body></html>'
       const result = wwwaxe(html)
       expect(result).toContain('url: https://example.com/page')
     })
 
     it('extracts og:url when no canonical link', () => {
-      const html = '<html><head><meta property="og:url" content="https://example.com/page"></head><body><p>Hi</p></body></html>'
+      const html =
+        '<html><head><meta property="og:url" content="https://example.com/page"></head><body><p>Hi</p></body></html>'
       const result = wwwaxe(html)
       expect(result).toContain('url: https://example.com/page')
     })
 
     it('canonical URL takes priority over og:url', () => {
-      const html = '<html><head><link rel="canonical" href="https://example.com/canonical"><meta property="og:url" content="https://example.com/og"></head><body><p>Hi</p></body></html>'
+      const html =
+        '<html><head><link rel="canonical" href="https://example.com/canonical"><meta property="og:url" content="https://example.com/og"></head><body><p>Hi</p></body></html>'
       const result = wwwaxe(html)
       expect(result).toContain('url: https://example.com/canonical')
       expect(result).not.toContain('og')
     })
 
     it('removes non-useful meta tags', () => {
-      const html = '<html><head><meta name="generator" content="WordPress"><meta name="description" content="Good"></head><body><p>Hi</p></body></html>'
+      const html =
+        '<html><head><meta name="generator" content="WordPress"><meta name="description" content="Good"></head><body><p>Hi</p></body></html>'
       const result = wwwaxe(html)
       expect(result).not.toContain('generator')
       expect(result).toContain('description')
@@ -268,7 +278,8 @@ describe('wwwaxe', () => {
     })
 
     it('YAML-escapes values with colons', () => {
-      const html = '<html><head><title>Part 1: The Beginning</title></head><body><p>Hi</p></body></html>'
+      const html =
+        '<html><head><title>Part 1: The Beginning</title></head><body><p>Hi</p></body></html>'
       const result = wwwaxe(html)
       expect(result).toContain('title: "Part 1: The Beginning"')
     })
@@ -361,7 +372,8 @@ describe('wwwaxe', () => {
     })
 
     it('strips elements with chrome roles', () => {
-      const html = '<div role="banner"><p>Banner</p></div><div role="navigation"><a href="/">Nav</a></div><main><p>Content</p></main><div role="contentinfo"><p>Footer</p></div>'
+      const html =
+        '<div role="banner"><p>Banner</p></div><div role="navigation"><a href="/">Nav</a></div><main><p>Content</p></main><div role="contentinfo"><p>Footer</p></div>'
       const result = wwwaxe(html, { core: true })
       expect(result).not.toContain('Banner')
       expect(result).not.toContain('role="navigation"')
@@ -407,7 +419,8 @@ describe('wwwaxe', () => {
     })
 
     it('does not strip chrome when core is false', () => {
-      const html = '<header><nav><a href="/">Home</a></nav></header><main><p>Content</p></main><footer><p>Footer</p></footer>'
+      const html =
+        '<header><nav><a href="/">Home</a></nav></header><main><p>Content</p></main><footer><p>Footer</p></footer>'
       const result = wwwaxe(html, { core: false, markdown: false })
       expect(result).toContain('<header>')
       expect(result).toContain('<nav>')
@@ -780,21 +793,30 @@ describe('wwwaxe', () => {
     })
 
     it('strips data URIs from srcset', () => {
-      const html = '<html><body><img srcset="' + smallDataUri + ' 1x, https://example.com/photo.jpg 2x" alt="photo"></body></html>'
+      const html =
+        '<html><body><img srcset="' +
+        smallDataUri +
+        ' 1x, https://example.com/photo.jpg 2x" alt="photo"></body></html>'
       const result = wwwaxe(html, { markdown: false })
       expect(result).not.toContain('data:image')
       expect(result).toContain('https://example.com/photo.jpg')
     })
 
     it('strips data URIs from poster attribute', () => {
-      const html = '<html><body><video poster="' + bigDataUri + '"><source src="video.mp4"></video></body></html>'
+      const html =
+        '<html><body><video poster="' +
+        bigDataUri +
+        '"><source src="video.mp4"></video></body></html>'
       const result = wwwaxe(html, { markdown: false })
       expect(result).not.toContain('data:image')
       expect(result).not.toContain('AAAA')
     })
 
     it('strips data URI from og:image in frontmatter', () => {
-      const html = '<html><head><meta property="og:image" content="' + bigDataUri + '"><title>Test</title></head><body><p>Content</p></body></html>'
+      const html =
+        '<html><head><meta property="og:image" content="' +
+        bigDataUri +
+        '"><title>Test</title></head><body><p>Content</p></body></html>'
       const result = wwwaxe(html)
       expect(result).not.toContain('data:image')
       expect(result).toContain('title: Test')
@@ -803,16 +825,22 @@ describe('wwwaxe', () => {
     })
 
     it('preserves normal og:image URL in frontmatter', () => {
-      const html = '<html><head><meta property="og:image" content="https://example.com/og.jpg"><title>Test</title></head><body><p>Content</p></body></html>'
+      const html =
+        '<html><head><meta property="og:image" content="https://example.com/og.jpg"><title>Test</title></head><body><p>Content</p></body></html>'
       const result = wwwaxe(html)
       expect(result).toContain('image: https://example.com/og.jpg')
     })
 
     it('handles multiple images mixing data URIs and real URLs', () => {
-      const html = '<html><body>' +
-        '<img src="' + bigDataUri + '" alt="placeholder">' +
+      const html =
+        '<html><body>' +
+        '<img src="' +
+        bigDataUri +
+        '" alt="placeholder">' +
         '<img src="https://example.com/real.jpg" alt="real">' +
-        '<img src="' + smallDataUri + '" alt="icon">' +
+        '<img src="' +
+        smallDataUri +
+        '" alt="icon">' +
         '</body></html>'
       const result = wwwaxe(html)
       expect(result).not.toContain('data:image')
@@ -831,15 +859,17 @@ describe('wwwaxe', () => {
 
     it('dramatically reduces output size when data URIs are present', () => {
       // Simulate a Google-like page with many inline base64 images
-      const images = Array.from({ length: 10 }, (_, i) =>
-        '<img src="data:image/png;base64,' + 'B'.repeat(50000) + '" alt="img' + i + '">'
+      const images = Array.from(
+        { length: 10 },
+        (_, i) => '<img src="data:image/png;base64,' + 'B'.repeat(50000) + '" alt="img' + i + '">',
       ).join('')
-      const html = '<html><body><main><h1>Search Results</h1>' + images + '<p>Footer</p></main></body></html>'
-      
+      const html =
+        '<html><body><main><h1>Search Results</h1>' + images + '<p>Footer</p></main></body></html>'
+
       const inputSize = html.length
       const result = wwwaxe(html)
       const outputSize = result.length
-      
+
       // Input is ~500KB, output should be tiny
       expect(inputSize).toBeGreaterThan(400000)
       expect(outputSize).toBeLessThan(1000)

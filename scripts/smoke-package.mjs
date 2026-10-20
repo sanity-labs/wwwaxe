@@ -27,15 +27,20 @@ try {
   const html = '<html><body><main><h1>Hi</h1><p>text</p></main></body></html>'
   const expected = (mod) => {
     const out = mod.wwwaxe(html)
-    if (typeof out !== 'string' || !out.includes('# Hi')) throw new Error('unexpected output: ' + out)
+    if (typeof out !== 'string' || !out.includes('# Hi'))
+      throw new Error('unexpected output: ' + out)
   }
 
-  writeFileSync(join(consumer, 'cjs.cjs'), `module.exports = require(${JSON.stringify(pkg.name)})\n`)
+  writeFileSync(
+    join(consumer, 'cjs.cjs'),
+    `module.exports = require(${JSON.stringify(pkg.name)})\n`,
+  )
   writeFileSync(join(consumer, 'esm.mjs'), `export * from ${JSON.stringify(pkg.name)}\n`)
   expected((await import(join(consumer, 'cjs.cjs'))).default)
   expected(await import(join(consumer, 'esm.mjs')))
 
-  const usage = `import { wwwaxe, type WwwaxeOptions } from ${JSON.stringify(pkg.name)}\n` +
+  const usage =
+    `import { wwwaxe, type WwwaxeOptions } from ${JSON.stringify(pkg.name)}\n` +
     `const options: WwwaxeOptions = { core: true }\n` +
     `export const out: string = wwwaxe('<p>x</p>', options)\n`
   writeFileSync(
@@ -48,7 +53,14 @@ try {
   writeFileSync(
     join(consumer, 'tsconfig.json'),
     JSON.stringify({
-      compilerOptions: { module: 'node16', moduleResolution: 'node16', strict: true, noEmit: true, skipLibCheck: false, types: [] },
+      compilerOptions: {
+        module: 'node16',
+        moduleResolution: 'node16',
+        strict: true,
+        noEmit: true,
+        skipLibCheck: false,
+        types: [],
+      },
       files: ['types.cts', 'types.mts'],
     }),
   )

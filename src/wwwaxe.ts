@@ -1,5 +1,15 @@
 import { parseDocument } from 'htmlparser2'
-import { Element, Text, Comment, Node, Document, type ChildNode, isTag, isText, hasChildren } from 'domhandler'
+import {
+  Element,
+  Text,
+  Comment,
+  Node,
+  Document,
+  type ChildNode,
+  isTag,
+  isText,
+  hasChildren,
+} from 'domhandler'
 import render from 'dom-serializer'
 import { removeElement, textContent, getChildren } from 'domutils'
 
@@ -20,96 +30,210 @@ export interface WwwaxeOptions {
 
 /** Tags to remove entirely (tag + all children) */
 const REMOVE_TAGS = new Set([
-  'script', 'style', 'noscript', 'svg', 'link', 'iframe',
+  'script',
+  'style',
+  'noscript',
+  'svg',
+  'link',
+  'iframe',
   // Common non-content elements
   'template',
 ])
 
 /** Tags that are purely presentational wrappers — unwrap children, discard tag */
 const UNWRAP_TAGS = new Set([
-  'span', 'div', 'font', 'center', 'b', 'i', 'u', 'em', 'strong', 'small',
-  'big', 'mark', 'sub', 'sup', 'abbr', 'cite', 'code', 'kbd', 'samp', 'var',
-  'del', 'ins', 's', 'strike', 'wbr', 'bdi', 'bdo',
+  'span',
+  'div',
+  'font',
+  'center',
+  'b',
+  'i',
+  'u',
+  'em',
+  'strong',
+  'small',
+  'big',
+  'mark',
+  'sub',
+  'sup',
+  'abbr',
+  'cite',
+  'code',
+  'kbd',
+  'samp',
+  'var',
+  'del',
+  'ins',
+  's',
+  'strike',
+  'wbr',
+  'bdi',
+  'bdo',
 ])
 
 /** Tags that should NOT be unwrapped when markdown mode is enabled (they survive for markdown rewriting) */
-const MARKDOWN_PRESERVE_TAGS = new Set([
-  'strong', 'b', 'em', 'i', 'code', 'del', 's', 'strike',
-])
+const MARKDOWN_PRESERVE_TAGS = new Set(['strong', 'b', 'em', 'i', 'code', 'del', 's', 'strike'])
 
 /** Structural tags we always keep */
 const KEEP_TAGS = new Set([
   // Document
-  'html', 'head', 'body',
+  'html',
+  'head',
+  'body',
   // Meta
-  'title', 'meta', 'base',
+  'title',
+  'meta',
+  'base',
   // Sectioning
-  'header', 'footer', 'main', 'nav', 'article', 'section', 'aside',
-  'hgroup', 'search', 'address',
+  'header',
+  'footer',
+  'main',
+  'nav',
+  'article',
+  'section',
+  'aside',
+  'hgroup',
+  'search',
+  'address',
   // Headings
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
   // Content
-  'p', 'blockquote', 'pre', 'figure', 'figcaption', 'hr', 'br',
+  'p',
+  'blockquote',
+  'pre',
+  'figure',
+  'figcaption',
+  'hr',
+  'br',
   // Lists
-  'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'menu',
+  'ul',
+  'ol',
+  'li',
+  'dl',
+  'dt',
+  'dd',
+  'menu',
   // Tables
-  'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'colgroup', 'col',
+  'table',
+  'thead',
+  'tbody',
+  'tfoot',
+  'tr',
+  'th',
+  'td',
+  'caption',
+  'colgroup',
+  'col',
   // Forms
-  'form', 'fieldset', 'legend', 'label', 'input', 'textarea', 'select',
-  'option', 'optgroup', 'button', 'output', 'datalist',
+  'form',
+  'fieldset',
+  'legend',
+  'label',
+  'input',
+  'textarea',
+  'select',
+  'option',
+  'optgroup',
+  'button',
+  'output',
+  'datalist',
   // Media
-  'img', 'picture', 'source', 'video', 'audio', 'track',
+  'img',
+  'picture',
+  'source',
+  'video',
+  'audio',
+  'track',
   // Links
   'a',
   // Other semantic
-  'details', 'summary', 'dialog', 'time',
+  'details',
+  'summary',
+  'dialog',
+  'time',
 ])
 
 /** Attributes to keep — everything else is stripped */
 const CONTENT_ATTRIBUTES = new Set([
   // Links & media
-  'href', 'src', 'srcset', 'alt', 'poster',
+  'href',
+  'src',
+  'srcset',
+  'alt',
+  'poster',
   // Semantics
-  'role', 'aria-label', 'aria-labelledby', 'aria-describedby',
-  'title', 'lang', 'dir', 'translate',
+  'role',
+  'aria-label',
+  'aria-labelledby',
+  'aria-describedby',
+  'title',
+  'lang',
+  'dir',
+  'translate',
   // Form semantics
-  'type', 'name', 'value', 'placeholder', 'for', 'action', 'method',
-  'required', 'disabled', 'checked', 'selected', 'readonly',
-  'min', 'max', 'step', 'pattern', 'maxlength', 'minlength',
-  'multiple', 'rows', 'cols',
+  'type',
+  'name',
+  'value',
+  'placeholder',
+  'for',
+  'action',
+  'method',
+  'required',
+  'disabled',
+  'checked',
+  'selected',
+  'readonly',
+  'min',
+  'max',
+  'step',
+  'pattern',
+  'maxlength',
+  'minlength',
+  'multiple',
+  'rows',
+  'cols',
   // Table semantics
-  'colspan', 'rowspan', 'scope', 'headers',
+  'colspan',
+  'rowspan',
+  'scope',
+  'headers',
   // Meta
-  'content', 'property', 'charset', 'http-equiv',
+  'content',
+  'property',
+  'charset',
+  'http-equiv',
   // Media
-  'width', 'height', 'controls', 'autoplay', 'loop', 'muted',
+  'width',
+  'height',
+  'controls',
+  'autoplay',
+  'loop',
+  'muted',
   // Time
   'datetime',
   // Details
   'open',
   // Lists
-  'start', 'reversed',
+  'start',
+  'reversed',
 ])
 
 /** Chrome tags to strip in core mode */
-const CHROME_TAGS = new Set([
-  'nav', 'footer', 'aside', 'dialog',
-])
+const CHROME_TAGS = new Set(['nav', 'footer', 'aside', 'dialog'])
 
 /** Sectioning elements whose child <header> is content, not chrome */
-const SECTIONING_TAGS = new Set([
-  'section', 'article', 'main', 'aside',
-])
+const SECTIONING_TAGS = new Set(['section', 'article', 'main', 'aside'])
 
 /** Chrome roles to strip in core mode */
-const CHROME_ROLES = new Set([
-  'banner', 'navigation', 'complementary', 'contentinfo', 'search',
-])
+const CHROME_ROLES = new Set(['banner', 'navigation', 'complementary', 'contentinfo', 'search'])
 
 /** Well-known IDs for main content fallback */
-const WELL_KNOWN_CONTENT_IDS = [
-  'main-content', 'content', 'main', 'page-content', 'site-content',
-]
+const WELL_KNOWN_CONTENT_IDS = ['main-content', 'content', 'main', 'page-content', 'site-content']
 
 function isEventAttribute(name: string): boolean {
   return name.startsWith('on') && name.length > 2
@@ -365,8 +489,8 @@ function reassembleRSCPayloads(doc: Document): void {
 
   for (const tmpl of templates) {
     const boundaryId = tmpl.attribs.id ?? '' // e.g. "B:0"
-    const slotNum = boundaryId.slice(2)  // e.g. "0"
-    const slotId = 'S:' + slotNum        // e.g. "S:0"
+    const slotNum = boundaryId.slice(2) // e.g. "0"
+    const slotId = 'S:' + slotNum // e.g. "S:0"
 
     // Find the corresponding hidden div
     const hiddenDiv = findById(doc, slotId)
@@ -447,8 +571,8 @@ function removeChromeElements(node: Node): void {
       // <header> is chrome only when it's page-level (not inside a sectioning element).
       // HTML5 allows <header> inside <section>/<article>/<main> as a section header.
       if (tag === 'header') {
-        const isInsideSectioning = node && isTag(node) &&
-          SECTIONING_TAGS.has((node as Element).tagName.toLowerCase())
+        const isInsideSectioning =
+          node && isTag(node) && SECTIONING_TAGS.has((node as Element).tagName.toLowerCase())
         if (!isInsideSectioning) {
           removeElement(child)
           continue
@@ -503,8 +627,10 @@ function stripChrome(doc: Document): void {
   removeChromeElements(doc)
 
   // Check if <main> or role="main" exists
-  const mainEl = findElement(doc, 'main') ||
-    findElements(doc, (el) => (el.attribs.role || '').toLowerCase() === 'main')[0] || null
+  const mainEl =
+    findElement(doc, 'main') ||
+    findElements(doc, (el) => (el.attribs.role || '').toLowerCase() === 'main')[0] ||
+    null
 
   if (mainEl) {
     // main exists — but check if it has meaningful text content
@@ -579,15 +705,21 @@ function stripAttributes(el: Element, options: WwwaxeOptions): void {
 
     // Conditionally skip or keep
     if (lowerKey === 'class') {
-      if (options.keepClasses) { newAttribs[key] = value }
+      if (options.keepClasses) {
+        newAttribs[key] = value
+      }
       continue
     }
     if (lowerKey === 'id') {
-      if (options.keepIds !== false) { newAttribs[key] = value }
+      if (options.keepIds !== false) {
+        newAttribs[key] = value
+      }
       continue
     }
     if (isDataAttribute(lowerKey)) {
-      if (options.keepDataAttributes) { newAttribs[key] = value }
+      if (options.keepDataAttributes) {
+        newAttribs[key] = value
+      }
       continue
     }
 
@@ -599,9 +731,10 @@ function stripAttributes(el: Element, options: WwwaxeOptions): void {
       }
       if (lowerKey === 'srcset') {
         // srcset can have multiple entries — strip any that are data URIs
-        const cleaned = value.split(',')
-          .map(s => s.trim())
-          .filter(s => !s.startsWith('data:'))
+        const cleaned = value
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => !s.startsWith('data:'))
           .join(', ')
         if (cleaned) {
           newAttribs[key] = cleaned
@@ -643,7 +776,7 @@ function hasMeaningfulContent(node: Node): boolean {
     }
     // Check children
     if (hasChildren(node)) {
-      return getChildren(node).some(child => hasMeaningfulContent(child))
+      return getChildren(node).some((child) => hasMeaningfulContent(child))
     }
   }
   return false
@@ -729,7 +862,17 @@ function processNode(node: Node, options: WwwaxeOptions, unwrapTags: Set<string>
   }
 
   // Remove empty structural elements (except void elements and head-level)
-  const voidElements = new Set(['br', 'hr', 'img', 'input', 'meta', 'source', 'track', 'col', 'base'])
+  const voidElements = new Set([
+    'br',
+    'hr',
+    'img',
+    'input',
+    'meta',
+    'source',
+    'track',
+    'col',
+    'base',
+  ])
   const headElements = new Set(['head', 'html', 'body', 'title'])
   if (!voidElements.has(tag) && !headElements.has(tag) && !hasMeaningfulContent(node)) {
     removeElement(node)
@@ -765,7 +908,7 @@ function unwrapElement(el: Element): void {
   mutableParent.children = [
     ...parentChildren.slice(0, index),
     ...children,
-    ...parentChildren.slice(index + 1)
+    ...parentChildren.slice(index + 1),
   ]
 
   // Fix prev/next links
@@ -923,14 +1066,20 @@ function markdownRewrite(node: Node): void {
       break
     }
     case 'ul': {
-      const items = getChildren(el).filter((c: Node) => isTag(c) && (c as Element).tagName.toLowerCase() === 'li')
+      const items = getChildren(el).filter(
+        (c: Node) => isTag(c) && (c as Element).tagName.toLowerCase() === 'li',
+      )
       const lines = items.map((item: Node) => '- ' + getMdTextContent(item).trim())
       replaceWithText(el, lines.join('\n') + '\n')
       break
     }
     case 'ol': {
-      const items = getChildren(el).filter((c: Node) => isTag(c) && (c as Element).tagName.toLowerCase() === 'li')
-      const lines = items.map((item: Node, i: number) => (i + 1) + '. ' + getMdTextContent(item).trim())
+      const items = getChildren(el).filter(
+        (c: Node) => isTag(c) && (c as Element).tagName.toLowerCase() === 'li',
+      )
+      const lines = items.map(
+        (item: Node, i: number) => i + 1 + '. ' + getMdTextContent(item).trim(),
+      )
       replaceWithText(el, lines.join('\n') + '\n')
       break
     }

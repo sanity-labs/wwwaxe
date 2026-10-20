@@ -56,6 +56,7 @@ No `<script>`, no `class="text-gray-700 leading-relaxed"`, no `data-*` noise. Ju
 ## What it does
 
 **Removes entirely:**
+
 - `<script>`, `<style>`, `<noscript>`, `<svg>`, `<link>`, `<iframe>`, `<template>` tags and their contents
 - All `class`, `style`, `data-*`, and event handler attributes (`onclick`, `onload`, etc.)
 - Hidden elements (`hidden`, `aria-hidden="true"`)
@@ -64,6 +65,7 @@ No `<script>`, no `class="text-gray-700 leading-relaxed"`, no `data-*` noise. Ju
 - Excessive whitespace
 
 **Keeps and converts:**
+
 - `<head>` → YAML frontmatter with `title`, `description`, `url` (canonical), and `og:image`
 - Headings → `## Heading` markdown syntax
 - Links → `[text](href)` markdown syntax
@@ -76,14 +78,14 @@ No `<script>`, no `class="text-gray-700 leading-relaxed"`, no `data-*` noise. Ju
 
 ## Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `markdown` | `boolean` | `true` | Convert headings, links, images, lists, bold, italic, code to markdown syntax |
-| `core` | `boolean` | `false` | Strip chrome (header, nav, footer, aside, dialog) and isolate main content |
-| `keepIds` | `boolean` | `true` | Keep `id` attributes |
-| `keepClasses` | `boolean` | `false` | Keep `class` attributes |
-| `keepDataAttributes` | `boolean` | `false` | Keep `data-*` attributes |
-| `keepAriaHidden` | `boolean` | `false` | Keep `aria-hidden="true"` elements |
+| Option               | Type      | Default | Description                                                                   |
+| -------------------- | --------- | ------- | ----------------------------------------------------------------------------- |
+| `markdown`           | `boolean` | `true`  | Convert headings, links, images, lists, bold, italic, code to markdown syntax |
+| `core`               | `boolean` | `false` | Strip chrome (header, nav, footer, aside, dialog) and isolate main content    |
+| `keepIds`            | `boolean` | `true`  | Keep `id` attributes                                                          |
+| `keepClasses`        | `boolean` | `false` | Keep `class` attributes                                                       |
+| `keepDataAttributes` | `boolean` | `false` | Keep `data-*` attributes                                                      |
+| `keepAriaHidden`     | `boolean` | `false` | Keep `aria-hidden="true"` elements                                            |
 
 ## Core mode
 
@@ -97,7 +99,7 @@ With `core: true`, wwwaxe strips page chrome and isolates the main content befor
 
 Chrome elements removed in core mode: `<header>`, `<nav>`, `<footer>`, `<aside>`, `<dialog>`.
 
-**Note:** `<header>` elements *inside* a `<section>` or `<article>` are preserved — they're content headers, not page chrome.
+**Note:** `<header>` elements _inside_ a `<section>` or `<article>` are preserved — they're content headers, not page chrome.
 
 ## RSC streaming reassembly
 
