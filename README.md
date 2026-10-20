@@ -105,9 +105,25 @@ React Server Components pages often stream content as a series of `<div hidden i
 
 wwwaxe automatically detects this pattern and reassembles the streamed fragments into `<main>` before processing. No configuration needed — if the page looks like an RSC streaming page, it's handled transparently.
 
+## Development
+
+Requires Node 20+ (CI runs Node 24) and pnpm (`corepack enable` picks up the pinned version).
+
+```sh
+pnpm install
+pnpm build         # tsup: dist/ with CommonJS, ESM and type declarations
+pnpm typecheck     # tsc (TypeScript 7)
+pnpm lint          # oxlint
+pnpm format        # oxfmt --check (pnpm format:fix to write)
+pnpm test          # vitest
+pnpm test:package  # packs the build and loads it via require, import and types
+```
+
+`dist/` is built, never committed; `prepack` rebuilds it on publish.
+
 ## Releasing
 
-Releases are published from CI via npm trusted publishing, with provenance. Add a changeset to any PR that should ship (`npx changeset`). On merge to `master`, the release workflow opens a "Version Packages" PR; merging that PR publishes to npm.
+Releases are published from CI via npm trusted publishing, with provenance. Add a changeset to any PR that should ship (`pnpm exec changeset`). On merge to `master`, the release workflow opens a "Version Packages" PR; merging that PR publishes to npm.
 
 ## License
 

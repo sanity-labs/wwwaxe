@@ -25,19 +25,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
-          cache: npm
+          node-version-file: package.json
+          cache: pnpm
 
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run build
-      - run: npm test
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run format
+      - run: pnpm test
+      - run: pnpm run test:package
 
       - uses: changesets/action@v1
         with:
-          version: npx changeset version
-          publish: npx changeset publish
+          version: pnpm exec changeset version
+          publish: pnpm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -15,7 +15,8 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist"
@@ -23,9 +24,14 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "format": "oxfmt --check",
+    "format:fix": "oxfmt",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepack": "npm run build"
+    "test:package": "node scripts/smoke-package.mjs",
+    "prepack": "pnpm run build",
+    "release": "changeset publish"
   },
   "keywords": [
     "html",
@@ -46,16 +52,31 @@
   "publishConfig": {
     "access": "public"
   },
-  "devDependencies": {
-    "@changesets/cli": "^2.31.1",
-    "tsup": "^8.0.0",
-    "typescript": "^5.4.0",
-    "vitest": "^3.0.0"
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.x",
+      "onFail": "ignore"
+    }
   },
   "dependencies": {
     "dom-serializer": "^2.0.0",
     "domhandler": "^5.0.3",
     "domutils": "^3.1.0",
     "htmlparser2": "^9.1.0"
+  },
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.1",
+    "@types/node": "^24.19.2",
+    "oxfmt": "^0.73.0",
+    "oxlint": "^1.88.0",
+    "oxlint-tsgolint": "^7.0.2004",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12"
   }
 }

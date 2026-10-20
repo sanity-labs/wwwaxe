@@ -1,5 +1,5 @@
 import { parseDocument } from 'htmlparser2'
-import { Element, Text, Comment, Node, Document, ChildNode, isTag, isText, hasChildren } from 'domhandler'
+import { Element, Text, Comment, Node, Document, type ChildNode, isTag, isText, hasChildren } from 'domhandler'
 import render from 'dom-serializer'
 import { removeElement, textContent, getChildren } from 'domutils'
 
@@ -110,9 +110,6 @@ const CHROME_ROLES = new Set([
 const WELL_KNOWN_CONTENT_IDS = [
   'main-content', 'content', 'main', 'page-content', 'site-content',
 ]
-
-/** Event handler attribute prefixes */
-const EVENT_PREFIXES = ['on']
 
 function isEventAttribute(name: string): boolean {
   return name.startsWith('on') && name.length > 2
@@ -367,7 +364,7 @@ function reassembleRSCPayloads(doc: Document): void {
   if (templates.length === 0) return
 
   for (const tmpl of templates) {
-    const boundaryId = tmpl.attribs.id // e.g. "B:0"
+    const boundaryId = tmpl.attribs.id ?? '' // e.g. "B:0"
     const slotNum = boundaryId.slice(2)  // e.g. "0"
     const slotId = 'S:' + slotNum        // e.g. "S:0"
 
@@ -897,8 +894,9 @@ function markdownRewrite(node: Node): void {
       // Get content — might be <pre><code>text</code></pre> or <pre>text</pre>
       const children = getChildren(el)
       let text: string
-      if (children.length === 1 && isTag(children[0]) && (children[0] as Element).tagName.toLowerCase() === 'code') {
-        text = getMdTextContent(children[0])
+      const only = children[0]
+      if (children.length === 1 && only && isTag(only) && only.tagName.toLowerCase() === 'code') {
+        text = getMdTextContent(only)
       } else {
         text = getMdTextContent(el)
       }
@@ -911,7 +909,7 @@ function markdownRewrite(node: Node): void {
     case 'h4':
     case 'h5':
     case 'h6': {
-      const level = parseInt(tag[1])
+      const level = parseInt(tag.charAt(1))
       const prefix = '#'.repeat(level)
       const text = getMdTextContent(el)
       replaceWithText(el, '\n' + prefix + ' ' + text + '\n')
