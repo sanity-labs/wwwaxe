@@ -109,11 +109,11 @@ wwwaxe automatically detects this pattern and reassembles the streamed fragments
 
 ## Development
 
-Requires Node 20+ (CI runs Node 24) and pnpm (`corepack enable` picks up the pinned version).
+The package runs on Node 20+. Building it needs Node 22.18+ or 24.11+ (tsdown's requirement; CI runs Node 24) and pnpm (`corepack enable` picks up the pinned version).
 
 ```sh
 pnpm install
-pnpm build         # tsup: dist/ with CommonJS, ESM and type declarations
+pnpm build         # tsdown: dist/ with CommonJS, ESM and type declarations
 pnpm typecheck     # tsc (TypeScript 7)
 pnpm lint          # oxlint
 pnpm format        # oxfmt --check (pnpm format:fix to write)
