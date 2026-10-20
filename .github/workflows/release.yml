@@ -1,12 +1,12 @@
 # Publishes to npm via OIDC trusted publishing (no npm token).
-# On every push to master, changesets/action either opens/updates a
+# On every push to main, changesets/action either opens/updates a
 # "Version Packages" PR, or, if that PR was just merged, publishes.
 name: Release
 
 on:
   push:
     branches:
-      - master
+      - main
   workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
